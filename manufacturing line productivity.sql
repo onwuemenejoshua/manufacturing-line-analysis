@@ -163,7 +163,7 @@ calculation. the runtime is 2470
 
 */
 
--- This calculate the total ideal time for all the batches.
+-- This calculate the total ideal time for all the batches. i.e which is also the total runtime.
 
 
 SELECT SUM(p.Min_batch_time) AS TotalIdealTime
@@ -175,7 +175,7 @@ ON lp.Product = p.Product;
 
 SELECT 
     CAST(
-        (SELECT SUM(p.[Min_batch_time]) 
+        (SELECT SUM(p.Min_batch_time) 
          FROM LineProductivity AS lp
          JOIN Products AS p ON lp.Product = p.Product) * 100.0
         / (
@@ -248,10 +248,7 @@ SELECT
 
 Total downtime minutes measure the total time lost  during the batch during the total scheduled time
 
-downtime minutes as percentage of runtime measures how much time was lost to downtime, expressed as a percentage of the time the 
-line actually spent running productively (Runtime), not as a percentage of total scheduled time.
-
-Of the time the line was actually running, what fraction was lost to downtime?
+downtime minutes as percentage of runtime means of the time the line was actually running, what fraction was lost to downtime?
 */
 
 -- Total downtime minutes
@@ -275,3 +272,135 @@ SELECT
 
 
 -- BUSINESS QUESTIONS
+
+
+/*
+1. Which downtime factors account for the most lost production time, and what's the estimated output gain if the top 2 were eliminated?
+
+*/
+
+SELECT * FROM vw_LineDowntimeUnpivoted;
+SELECT * FROM vw_DowntimeWithReasons;
+
+-- Downtime Factor that account for the most lost production time
+
+SELECT ldu.DowntimeFactor, SUM(ldu.DowntimeMinutes) AS lost_Production_Time, ldr.Description, ldr.Operator_Error
+FROM vw_LineDowntimeUnpivoted AS ldu
+INNER JOIN (
+    SELECT DISTINCT DowntimeFactor, Description, Operator_Error
+    FROM vw_DowntimeWithReasons
+) AS ldr
+ON ldu.DowntimeFactor = ldr.DowntimeFactor
+GROUP BY ldu.DowntimeFactor, ldr.Description, ldr.Operator_Error
+ORDER BY lost_Production_Time DESC;
+
+-- factor 6 and 7 account for it the most
+
+-- how many estimated batches gained. where: Estimated_Batches_Gained = Top2_DowntimeMinutes / Avg_Min_Batch_Time
+
+SELECT
+    (SELECT SUM(DowntimeMinutes) FROM vw_LineDowntimeUnpivoted 
+     WHERE DowntimeFactor IN ('F6', 'F7'))  -- your top 2 factors
+    / (SELECT AVG(Min_batch_time) FROM Products)
+    AS Estimated_Batches_Gained;
+
+-- There will be 8 additional batches that will be gained.
+
+
+/*
+2. Which operator has the most downtime?
+*/
+
+SELECT lp.Operator, SUM(ldu.DowntimeMinutes) AS DowntimeMinutes FROM LineProductivity AS lp
+INNER JOIN vw_LineDowntimeUnpivoted AS ldu
+ON lp.Batch = ldu.Batch
+GROUP BY lp.Operator
+ORDER BY DowntimeMinutes DESC;
+
+-- Charlie has the most downtime 
+
+/*
+ 3. How far is the line running below its productivity target, and how much of that gap is downtime vs. slow running once active?
+*/
+
+-- The answer to this question is an explanation. Because the solving is already done on availability and efficiency in the KPI
+
+/*
+Here is the answer
+
+Downtime accounts for 36.98% of the gap. This is the Availability loss (100% − 64.02%). = 35.98
+
+Slow running accounts for 0%. Performance is at 100%, meaning there's no evidence in this dataset of the line running below its 
+target speed while active.
+
+Meaning the line is running 35.98% below its 100% productivity target
+
+*/
+
+/*
+4. Does downtime or efficiency vary meaningfully by product/flavor?
+*/
+
+-- Actual runtime including the batch and product because of the number 4 question
+
+CREATE VIEW vw_ActualRunTimeByBatch AS
+SELECT
+    Batch,
+    Product,
+    Date,
+    CASE
+        WHEN DATEDIFF(MINUTE, Start_Time, End_Time) < 0 THEN DATEDIFF(MINUTE, Start_Time, End_Time) + 1440
+        ELSE DATEDIFF(MINUTE, Start_Time, End_Time)
+    END AS ActualRunTime
+FROM LineProductivity;
+
+SELECT * FROM vw_ActualRunTimeByBatch;
+
+-- answering the question
+
+SELECT
+    p.Product,
+    p.Flavor,
+    COUNT(lp.Batch) AS Batches,
+    SUM(ab.ActualRunTime) AS TotalActualRunTime,
+    SUM(dt.TotalBatchDowntime) AS TotalDowntime,
+    CAST(SUM(dt.TotalBatchDowntime)  / COUNT(lp.Batch) AS DECIMAL(5,2)) AS AvgDowntimePerBatch,
+    SUM(p.Min_batch_time) AS TotalMinBatchTime,
+    CAST(
+        (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime)) * 100.0
+        / SUM(ab.ActualRunTime)
+    AS DECIMAL(5,2)) AS Availability_Percent,
+    CAST(
+        SUM(p.Min_batch_time) * 100.0
+        / (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime))
+    AS DECIMAL(5,2)) AS Performance_Percent,
+    CAST(
+        (
+            (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime)) * 100.0
+            / SUM(ab.ActualRunTime)
+        )
+        *
+        (
+            SUM(p.Min_batch_time) * 100.0
+            / (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime))
+        )
+        / 100
+    AS DECIMAL(5,2)) AS Efficiency_Percent
+FROM LineProductivity AS lp
+JOIN Products AS p ON lp.Product = p.Product
+JOIN vw_ActualRunTimeByBatch AS ab ON ab.Batch = lp.Batch
+JOIN (
+    SELECT Batch, SUM(DowntimeMinutes) AS TotalBatchDowntime
+    FROM vw_LineDowntimeUnpivoted
+    GROUP BY Batch
+) AS dt ON dt.Batch = lp.Batch
+GROUP BY p.Product, p.Flavor
+ORDER BY Availability_Percent ASC;
+
+-- Downtime varies meaningully by product
+
+
+/*
+5. Is downtime or efficiency trending up/down over time, and are there specific days/operators driving the trend?
+*/
+
