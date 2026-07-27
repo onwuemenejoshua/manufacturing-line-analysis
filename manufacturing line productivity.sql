@@ -404,3 +404,177 @@ ORDER BY Availability_Percent ASC;
 5. Is downtime or efficiency trending up/down over time, and are there specific days/operators driving the trend?
 */
 
+SELECT * FROM vw_LineDowntimeUnpivoted;
+
+-- For Time trend
+
+
+SELECT
+    DATENAME(WEEKDAY, lp.Date) AS DayOfWeek,
+    COUNT(lp.Batch) AS Batches,
+    SUM(dt.TotalBatchDowntime) AS TotalDowntime,
+    CAST(
+        (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime)) * 100.0
+        / SUM(ab.ActualRunTime)
+    AS DECIMAL(5,2)) AS Availability_Percent,
+    CAST(
+        SUM(p.Min_batch_time) * 100.0
+        / (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime))
+    AS DECIMAL(5,2)) AS Performance_Percent,
+    CAST(
+        (
+            (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime)) * 100.0
+            / SUM(ab.ActualRunTime)
+        )
+        *
+        (
+            SUM(p.Min_batch_time) * 100.0
+            / (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime))
+        )
+        / 100
+    AS DECIMAL(5,2)) AS Efficiency_Percent
+FROM LineProductivity AS lp
+JOIN Products AS p ON lp.Product = p.Product
+JOIN vw_ActualRunTimeByBatch AS ab ON ab.Batch = lp.Batch
+LEFT JOIN (
+    SELECT Batch, SUM(DowntimeMinutes) AS TotalBatchDowntime
+    FROM vw_LineDowntimeUnpivoted
+    GROUP BY Batch
+) AS dt ON dt.Batch = lp.Batch
+GROUP BY DATENAME(WEEKDAY, lp.Date)
+ORDER BY SUM(dt.TotalBatchDowntime) DESC;
+
+-- Monday and Friday has the highest downtime. BUT if we want a chronological ordering
+
+SELECT
+    DATENAME(WEEKDAY, lp.Date) AS DayOfWeek,
+    COUNT(lp.Batch) AS Batches,
+    SUM(dt.TotalBatchDowntime) AS TotalDowntime,
+    CAST(
+        (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime)) * 100.0
+        / SUM(ab.ActualRunTime)
+    AS DECIMAL(5,2)) AS Availability_Percent,
+    CAST(
+        SUM(p.Min_batch_time) * 100.0
+        / (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime))
+    AS DECIMAL(5,2)) AS Performance_Percent,
+    CAST(
+        (
+            (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime)) * 100.0
+            / SUM(ab.ActualRunTime)
+        )
+        *
+        (
+            SUM(p.Min_batch_time) * 100.0
+            / (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime))
+        )
+        / 100
+    AS DECIMAL(5,2)) AS Efficiency_Percent
+FROM LineProductivity AS lp
+JOIN Products AS p ON lp.Product = p.Product
+JOIN vw_ActualRunTimeByBatch AS ab ON ab.Batch = lp.Batch
+LEFT JOIN (
+    SELECT Batch, SUM(DowntimeMinutes) AS TotalBatchDowntime
+    FROM vw_LineDowntimeUnpivoted
+    GROUP BY Batch
+) AS dt ON dt.Batch = lp.Batch
+GROUP BY DATENAME(WEEKDAY, lp.Date)
+ORDER BY
+    CASE DATENAME(WEEKDAY, lp.Date)
+        WHEN 'Monday' THEN 1
+        WHEN 'Tuesday' THEN 2
+        WHEN 'Wednesday' THEN 3
+        WHEN 'Thursday' THEN 4
+        WHEN 'Friday' THEN 5
+        WHEN 'Saturday' THEN 6
+        WHEN 'Sunday' THEN 7
+    END;
+
+-- Operator trend
+
+
+SELECT
+    lp.Operator,
+    COUNT(lp.Batch) AS Batches,
+    SUM(dt.TotalBatchDowntime) AS TotalDowntime,
+    CAST(
+        (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime)) * 100.0
+        / SUM(ab.ActualRunTime)
+    AS DECIMAL(5,2)) AS Availability_Percent,
+    CAST(
+        SUM(p.Min_batch_time) * 100.0
+        / (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime))
+    AS DECIMAL(5,2)) AS Performance_Percent,
+    CAST(
+        (
+            (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime)) * 100.0
+            / SUM(ab.ActualRunTime)
+        )
+        *
+        (
+            SUM(p.Min_batch_time) * 100.0
+            / (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime))
+        )
+        / 100
+    AS DECIMAL(5,2)) AS Efficiency_Percent
+FROM LineProductivity AS lp
+JOIN Products AS p ON lp.Product = p.Product
+JOIN vw_ActualRunTimeByBatch AS ab ON ab.Batch = lp.Batch
+LEFT JOIN (
+    SELECT Batch, SUM(DowntimeMinutes) AS TotalBatchDowntime
+    FROM vw_LineDowntimeUnpivoted
+    GROUP BY Batch
+) AS dt ON dt.Batch = lp.Batch
+GROUP BY lp.Operator
+ORDER BY TotalDowntime DESC;
+
+-- Charlie and Dee has the most downtime
+
+
+-- Combined: Day of Week + Operator trend
+
+SELECT
+    DATENAME(WEEKDAY, lp.Date) AS DayOfWeek,
+    lp.Operator,
+    COUNT(lp.Batch) AS Batches,
+    SUM(dt.TotalBatchDowntime) AS TotalDowntime,
+    CAST(
+        (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime)) * 100.0
+        / SUM(ab.ActualRunTime)
+    AS DECIMAL(5,2)) AS Availability_Percent,
+    CAST(
+        SUM(p.Min_batch_time) * 100.0
+        / (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime))
+    AS DECIMAL(5,2)) AS Performance_Percent,
+    CAST(
+        (
+            (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime)) * 100.0
+            / SUM(ab.ActualRunTime)
+        )
+        *
+        (
+            SUM(p.Min_batch_time) * 100.0
+            / (SUM(ab.ActualRunTime) - SUM(dt.TotalBatchDowntime))
+        )
+        / 100
+    AS DECIMAL(5,2)) AS Efficiency_Percent
+FROM LineProductivity AS lp
+JOIN Products AS p ON lp.Product = p.Product
+JOIN vw_ActualRunTimeByBatch AS ab ON ab.Batch = lp.Batch
+LEFT JOIN (
+    SELECT Batch, SUM(DowntimeMinutes) AS TotalBatchDowntime
+    FROM vw_LineDowntimeUnpivoted
+    GROUP BY Batch
+) AS dt ON dt.Batch = lp.Batch
+GROUP BY DATENAME(WEEKDAY, lp.Date), lp.Operator
+ORDER BY
+    CASE DATENAME(WEEKDAY, lp.Date)
+        WHEN 'Monday' THEN 1
+        WHEN 'Tuesday' THEN 2
+        WHEN 'Wednesday' THEN 3
+        WHEN 'Thursday' THEN 4
+        WHEN 'Friday' THEN 5
+        WHEN 'Saturday' THEN 6
+        WHEN 'Sunday' THEN 7
+    END,
+    TotalDowntime DESC;
