@@ -589,3 +589,5 @@ ORDER BY
         WHEN 'Sunday' THEN 7
     END,
     TotalDowntime DESC;
+    
+    -- Monday had the highest downtime with Charlie at its operator 
