@@ -591,3 +591,7 @@ ORDER BY
     TotalDowntime DESC;
     
     -- Monday had the highest downtime with Charlie at its operator 
+
+/*For Question 1, Machine adjustment and machine failure are the two biggest downtime drivers responsible for 586 of 1,388 total downtime minutes, 42% of all lost time. 
+Eliminating just these two factors could free up enough time for approximately 6 additional batches, without any other changes to the line.
+*/
