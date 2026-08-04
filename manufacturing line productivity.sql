@@ -311,7 +311,7 @@ ORDER BY lost_Production_Time DESC;
 
 SELECT
     (SELECT SUM(DowntimeMinutes) FROM vw_LineDowntimeUnpivoted 
-     WHERE DowntimeFactor IN ('F6', 'F7'))  -- your top 2 factors
+     WHERE DowntimeFactor IN ('F6', 'F7'))  -- top 2 factors downtime
     / (SELECT AVG(Min_batch_time) FROM Products)
     AS Estimated_Batches_Gained;
 
